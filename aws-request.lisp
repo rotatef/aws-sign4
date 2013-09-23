@@ -144,57 +144,45 @@
     (write-line credential-scope str)
     (write-string (hex-encode (hash canonical-request)) str)))
 
-(defun calculate-derived-key (secret-key date region service)
-  (labels ((calculate-hmac-digest (key val)
-             (let ((hmac
-                    (ironclad:make-hmac key :sha256)))
-               (ironclad:update-hmac hmac val)
-               (ironclad:hmac-digest hmac))))
-    (calculate-hmac-digest
-     (calculate-hmac-digest
-      (calculate-hmac-digest
-       (calculate-hmac-digest 
-        (sb-ext:string-to-octets (format nil "AWS4~A" secret-key))
-        (sb-ext:string-to-octets 
-         (if (stringp date)
-             date
-             (local-time:format-timestring nil date :format +iso-8601-basic-format+))))
-       (sb-ext:string-to-octets region))
-      (sb-ext:string-to-octets service))
-     (sb-ext:string-to-octets "aws4_request"))))
+(defun ensure-octets (data)
+  (if (stringp data)
+      (sb-ext:string-to-octets data :external-format :utf-8)
+      data))
 
-(defun calculate-signature (key string-to-sign date region service)
-  (labels ((calculate-hmac-digest (key val)
-             (let ((hmac
-                    (ironclad:make-hmac key :sha256)))
-               (ironclad:update-hmac hmac val)
-               (ironclad:hmac-digest hmac))))
-    (calculate-hmac-digest
-     (calculate-derived-key key date region service)
-     (sb-ext:string-to-octets string-to-sign :external-format :utf-8))))
+(defun hmac (key data)
+  (let ((hmac (ironclad:make-hmac (ensure-octets key) :sha256)))
+    (ironclad:update-hmac hmac (ensure-octets data))
+    (ironclad:hmac-digest hmac)))
+
+(defun calculate-signature (k-secret string-to-sign date region service)
+  (let* ((k-date (hmac (concatenate 'string "AWS4" k-secret) date))
+         (k-region (hmac k-date region))
+         (k-service (hmac k-region service))
+         (k-signing (hmac k-service "aws4_request")))
+    (hex-encode (hmac k-signing string-to-sign))))
 
 (defun authorization-header (access-key key credential-scope date region service request-method path params headers payload)
   (multiple-value-bind (creq singed-headers)
-      (create-canonical-request 
+      (create-canonical-request
                 request-method path params headers
                 (sb-ext:string-to-octets  payload :external-format :utf-8))
     (let* ((sts (string-to-sign (cadr (assoc "X-Amz-Date" headers :test #'equalp))
                                 credential-scope
                                 creq))
-           (signature 
-            (calculate-signature 
+           (signature
+            (calculate-signature
              key
              sts
              date
              region
              service)))
       (values
-       (format nil 
+       (format nil
                "AWS4-HMAC-SHA256 Credential=~A/~A, SignedHeaders=~A, Signature=~A"
                access-key
                credential-scope
                singed-headers
-               (ironclad:byte-array-to-hex-string  signature))
+               signature)
        creq
        sts))))
 
