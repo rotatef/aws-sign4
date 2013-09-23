@@ -230,52 +230,48 @@
           (list (cons "x-amz-target" x-amz-target)
                 (cons "Date" date)
                 (cons "x-amz-date"
-                      (local-time:format-timestring 
+                      (local-time:format-timestring
                        nil dateobj
                        :format +iso-8601-basic-format+
                        :timezone local-time:+utc-zone+)))))
     (unless *credentials*
       (error "AWS credentials missing"))
-    (multiple-value-bind (authorization-header creq sts)
-        (common-lisp-user::authorization-header 
-         (cadr *credentials*)
-         (format nil
-                 "~A/~A/~A/swf/aws4_request"
-                 (car *credentials*)
-                 (local-time:format-timestring 
-                  nil dateobj
-                  :format '((:YEAR 4) (:MONTH 2) (:DAY 2)))
-                 (string-downcase (symbol-name endpoint))
-                 )
-         :post 
-         path
-         nil
-         (append `(( "host" ,(cdr (assoc endpoint *swf-endpoints*)))
-                   ("Content-Type" ,content-type))
-                 (loop for x in additional-headers
-                    collect (list (car x) (cdr x))))
-         payload
-         dateobj)
-      (declare (ignore creq sts))
-      (push 
+    (let ((authorization-header
+           (authorization-header
+            (cadr *credentials*)
+            (format nil
+                    "~A/~A/~A/swf/aws4_request"
+                    (car *credentials*)
+                    (local-time:format-timestring
+                     nil dateobj
+                     :format '((:YEAR 4) (:MONTH 2) (:DAY 2)))
+                    (string-downcase (symbol-name endpoint))
+                    )
+            :post
+            path
+            nil
+            (append `(( "host" ,(cdr (assoc endpoint *swf-endpoints*)))
+                      ("Content-Type" ,content-type))
+                    (loop for x in additional-headers
+                          collect (list (car x) (cdr x))))
+            payload
+            dateobj)))
+      (push
        (cons "Authorization"
              authorization-header)
        additional-headers)
       (multiple-value-bind (body status-code)
-          (drakma:http-request 
-           (format nil "http://~A~A" (cdr (assoc endpoint *swf-endpoints*)) path) 
-           :method :post 
+          (drakma:http-request
+           (format nil "http://~A~A" (cdr (assoc endpoint *swf-endpoints*)) path)
+           :method :post
            :additional-headers additional-headers
            :content payload
            :content-type content-type)
         (values
          (when body
-           (sb-ext:octets-to-string 
+           (sb-ext:octets-to-string
             body))
-         status-code
-                                        ;creq 
-                                        ;sts
-         )))))
+         status-code)))))
 
 
 (initialize (file-credentials "~/.aws"))
