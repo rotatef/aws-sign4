@@ -151,7 +151,7 @@
                                           :gmt-offset-or-z)
                                 :timezone local-time:+utc-zone+))
 
-(defun aws-request2 (region service endpoint path x-amz-target content-type payload)
+(defun aws-request2 (region service method endpoint path x-amz-target content-type payload)
   (let* ((x-amz-date (x-amz-date))
          (date (subseq x-amz-date 0 8))
          (region (string-downcase region))
@@ -168,7 +168,7 @@
             date
             region
             service
-            "POST"
+            (string method)
             path
             nil
             `((:host . ,endpoint)
@@ -182,7 +182,7 @@
       (multiple-value-bind (body status-code)
           (drakma:http-request
            (format nil "http://~A~A" endpoint path)
-           :method :post
+           :method method
            :additional-headers additional-headers
            :content payload
            :content-type content-type)
@@ -195,4 +195,4 @@
 
 (initialize (file-credentials "~/.aws"))
 
-;(aws-request2 :eu-west-1 :swf "swf.eu-west-1.amazonaws.com" "/" "SimpleWorkflowService.ListDomains" "application/x-amz-json-1.0" "{\"registrationStatus\":\"REGISTERED\"}")
+;(aws-request2 :eu-west-1 :swf :post "swf.eu-west-1.amazonaws.com" "/" "SimpleWorkflowService.ListDomains" "application/x-amz-json-1.0" "{\"registrationStatus\":\"REGISTERED\"}")
