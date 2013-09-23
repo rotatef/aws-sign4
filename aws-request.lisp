@@ -111,10 +111,8 @@
              ))
     (values
      (with-output-to-string (str)
-       (format str "~A~%" (ecase request-method 
-                            (:get "GET") 
-                            (:post "POST")))
-       (format str "~A~%" (create-canonical-path path))
+       (write-line request-method str)
+       (write-line (create-canonical-path path) str)
        (loop for  x on (sort (copy-list params) #'string< :key (lambda (x) 
                                                                  (format nil "~S~S"
                                                                          (getkey x t)
@@ -207,7 +205,7 @@
             date
             region
             service
-            :post
+            "POST"
             path
             nil
             (append `(( "host" ,endpoint)
