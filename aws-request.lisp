@@ -58,74 +58,69 @@
                      (remove-dots
                       (reverse (split-sequence:split-sequence #\/ path :remove-empty-subseqs t))))))))
 
-(defun merge-duplicates* (list)
-  (when list
-    (let* ((rest (merge-duplicates (cdr list)))
-           (nextkey (caar rest))
-           (nextval (cdar rest))
-           (key (caar list))
-           (val (cdar list)))
-      (if (equalp nextkey key)
-          (cons 
-           (progn
-             (cons key 
-                   (append nextval val)))
-           (cdr rest))
-          (cons (cons key val)
-                rest)))))
+(defun create-canonical-query-string (params)
+  (with-output-to-string (str)
+    (labels ((getkey (v &optional (car nil))
+               (when car
+                 (setf v (car v)))
+               (when (symbolp v)
+                 (setf v (symbol-name v)))
+               (string-downcase v)))
+      (loop for x on (sort (copy-list params) #'string< :key (lambda (x)
+                                                               (format nil "~S~S"
+                                                                       (getkey x t)
+                                                                       (cdr x)
+                                                                       )))
+            for (key value) = (car x)
+            do (format str "~A=~A~A"
+                       (url-encode key)
+                       (url-encode value)
+                       (if (cdr x)
+                           "&" ""))))))
 
 
-(defun merge-duplicates (list)
-  (reverse (merge-duplicates* (reverse list))))
 
 
+
+
+(defun trimall (string)
+  (string-trim '(#\Space #\Tab) string))
+
+(defun merge-duplicate-headers (headers)
+  (loop for header = (pop headers)
+        while header
+        collect `(,(car header)
+                   ,(cdr header)
+                   ,@(loop while (equal (car header) (caar headers))
+                           collect (cdr (pop headers))))))
+
+(defun create-canonical-headers (headers)
+  (merge-duplicate-headers
+   (stable-sort (loop for (key . value) in headers
+                      collect (cons (string-downcase key) (trimall value)))
+                #'string<
+                :key #'car)))
 
 
 (defun create-canonical-request (request-method path params headers payload)
-  (labels ((getkey (v &optional (car nil))
-             (when car
-               (setf v (car v)))
-             (when (symbolp v)
-               (setf v (symbol-name v)))
-             (string-downcase v))
-           (signed-headers (str &optional (newline t))
-             (prog1
-                 (format str "~{~A~^;~}" 
-                         (remove-duplicates (sort (copy-list (loop for x in headers
-                                                                collect (getkey x t)))
-                                                  #'string<)
-                                            :test #'equalp))
-               (when newline
-                 (write-line "" str)))
-             ))
-    (values
-     (with-output-to-string (str)
-       (write-line request-method str)
-       (write-line (create-canonical-path path) str)
-       (loop for  x on (sort (copy-list params) #'string< :key (lambda (x) 
-                                                                 (format nil "~S~S"
-                                                                         (getkey x t)
-                                                                         (cdr x)
-                                                                         )))
-          for (key value) = (car x)
-          do (format str "~A=~A~A" 
-                     (url-encode key)
-                     (url-encode value)
-                     (if (cdr x)
-                         "&" "")))
-       (format str "~%")
-       (loop for  x on (merge-duplicates (sort (copy-list headers) #'string< :key (lambda (x) (getkey x t))))
-          for (key . value) = (car x)
-          do (format str "~A:~{~A~^,~}~%" 
-                     (hunchentoot:url-encode (getkey key))
-                     (loop for x in (sort (copy-list value) #'string<)
-                        collect (string-trim " " x))
-                     ))
-       (write-line "" str)
-       (signed-headers str)
-       (write-string (hex-encode (hash payload)) str))
-     (signed-headers nil nil)
-     )))
+  (let* ((canonical-headers (create-canonical-headers headers))
+         (signed-headers (format nil "~{~A~^;~}" (mapcar #'car canonical-headers))))
+    (values (with-output-to-string (str)
+              ;; HTTPRequestMethod:
+              (write-line request-method str)
+              ;; CanonicalURI:
+              (write-line (create-canonical-path path) str)
+              ;; CanonicalQueryString:
+              (write-line (create-canonical-query-string params) str)
+              ;; CanonicalHeaders:
+              (dolist (header canonical-headers)
+                (format str "~A:~{~A~^,~}~%" (car header) (cdr header)))
+              (write-line "" str)
+              ;; SignedHeaders
+              (write-line signed-headers str)
+              ;; Payload
+              (write-string (hex-encode (hash payload)) str))
+            signed-headers)))
 
 (defun string-to-sign (request-date credential-scope canonical-request)
   (with-output-to-string (str)
@@ -149,7 +144,7 @@
 (defun authorization-header (access-key key credential-scope date region service request-method path params headers payload)
   (multiple-value-bind (creq singed-headers)
       (create-canonical-request request-method path params headers payload)
-    (let* ((sts (string-to-sign (cadr (assoc "X-Amz-Date" headers :test #'equalp))
+    (let* ((sts (string-to-sign (cdr (assoc "X-Amz-Date" headers :test #'equalp))
                                 credential-scope
                                 creq))
            (signature
@@ -197,10 +192,9 @@
             "POST"
             path
             nil
-            (append `(( "host" ,endpoint)
-                      ("Content-Type" ,content-type))
-                    (loop for x in additional-headers
-                          collect (list (car x) (cdr x))))
+            `((:host . ,endpoint)
+              (:content-type . ,content-type)
+              ,@additional-headers)
             payload)))
       (push
        (cons "Authorization"
