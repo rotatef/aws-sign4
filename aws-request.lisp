@@ -150,42 +150,58 @@
                                           :gmt-offset-or-z)
                                 :timezone local-time:+utc-zone+))
 
-(defun aws-request (region service method endpoint path x-amz-target content-type payload)
-  (let* ((x-amz-date (x-amz-date))
+(defun aws-auth (region service method endpoint path params headers payload)
+  (unless *credentials*
+    (error "AWS credentials missing"))
+  (let* ((access-key (first *credentials*))
+         (private-key (second *credentials*))
+         (x-amz-date (x-amz-date))
          (date (subseq x-amz-date 0 8))
+         (method (string method))
          (region (string-downcase region))
-         (service (string-downcase service))
-         (additional-headers `(("x-amz-target" . ,x-amz-target)
-                               ("x-amz-date" . ,x-amz-date))))
-    (unless *credentials*
-      (error "AWS credentials missing"))
-    (let ((authorization-header
-           (authorization-header
-            (car *credentials*)
-            (cadr *credentials*)
-            x-amz-date
-            date
-            region
-            service
-            (string method)
-            path
-            nil
-            `((:host . ,endpoint)
-              (:content-type . ,content-type)
-              ,@additional-headers)
-            payload)))
-      (push
-       (cons "Authorization"
-             authorization-header)
-       additional-headers)
-      (multiple-value-bind (body status-code)
-          (drakma:http-request
-           (format nil "http://~A~A" endpoint path)
-           :method method
-           :additional-headers additional-headers
-           :content payload
-           :content-type content-type)
-        (values body status-code)))))
+         (service (string-downcase service)))
+    (multiple-value-bind (creq singed-headers)
+        (create-canonical-request method path params
+                                  `(("X-Amz-Date" . ,x-amz-date)
+                                    ("host" . ,endpoint)
+                                    ,@headers)
+                                  payload)
+      (let* ((credential-scope (format nil "~A/~A/~A/aws4_request" date region service))
+             (sts (string-to-sign x-amz-date
+                                  credential-scope
+                                  creq))
+             (signature (calculate-signature private-key
+                                             sts
+                                             date
+                                             region
+                                             service)))
+        `(("X-Amz-Date" . ,x-amz-date)
+          ("Authorization" . ,(format nil
+                                      "AWS4-HMAC-SHA256 Credential=~A/~A, SignedHeaders=~A, Signature=~A"
+                                      access-key
+                                      credential-scope
+                                      singed-headers
+                                      signature)))))))
+
+(defun aws-request (region service method endpoint path x-amz-target content-type payload)
+  (let ((aws-headers (aws-auth region
+                               service
+                               method
+                               endpoint
+                               path
+                               nil
+                               `(("x-amz-target" . ,x-amz-target)
+                                 (:content-type . ,content-type))
+                               payload)))
+    (multiple-value-bind (body status-code)
+        (drakma:http-request
+         (format nil "http://~A~A" endpoint path)
+         :method method
+         :additional-headers `((:x-amz-target . ,x-amz-target)
+                               ,@aws-headers)
+         :content payload
+         :content-type content-type)
+      (values body status-code))))
 
 (defun swf-request (region action payload)
   (multiple-value-bind (body status-code)
