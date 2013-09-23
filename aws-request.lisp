@@ -130,21 +130,19 @@
      (signed-headers nil nil)
      )))
 
-(defvar *timezonereg-read* nil)
+(defun hash (data)
+  (ironclad:digest-sequence :sha256
+                            (sb-ext:string-to-octets data
+                                                     :external-format :utf-8)))
+(defun hex-encode (bytes)
+  (ironclad:byte-array-to-hex-string bytes))
 
-(defun string-to-sign (canonical-request request-date credential)
-  (let ((credential-scope
-         (subseq credential (1+ (position #\/ credential)))))
-    (with-output-to-string (str)
-      (format str "AWS4-HMAC-SHA256~%")
-      (write-line request-date str)
-      (write-line credential-scope str)
-      (write-string (ironclad:byte-array-to-hex-string 
-                     (ironclad:digest-sequence 
-                      :sha256
-                      (sb-ext:string-to-octets canonical-request 
-                                               :external-format :utf-8)))
-                    str))))
+(defun string-to-sign (request-date credential-scope canonical-request)
+  (with-output-to-string (str)
+    (write-line "AWS4-HMAC-SHA256" str)
+    (write-line request-date str)
+    (write-line credential-scope str)
+    (write-string (hex-encode (hash canonical-request)) str)))
 
 (defun calculate-derived-key (secret-key date region service)
   (labels ((calculate-hmac-digest (key val)
@@ -165,38 +163,36 @@
       (sb-ext:string-to-octets service))
      (sb-ext:string-to-octets "aws4_request"))))
 
-(defun calculate-signature (key string-to-sign credential)
+(defun calculate-signature (key string-to-sign date region service)
   (labels ((calculate-hmac-digest (key val)
              (let ((hmac
                     (ironclad:make-hmac key :sha256)))
                (ironclad:update-hmac hmac val)
                (ironclad:hmac-digest hmac))))
-    (destructuring-bind (ign date region service ign2)
-        (split-sequence:split-sequence 
-         #\/ credential)
-      (declare (ignore ign ign2))
-      (calculate-hmac-digest
-       (calculate-derived-key key date region service)
-       (sb-ext:string-to-octets string-to-sign :external-format :utf-8)))))
+    (calculate-hmac-digest
+     (calculate-derived-key key date region service)
+     (sb-ext:string-to-octets string-to-sign :external-format :utf-8))))
 
-(defun authorization-header (key credential request-method path params headers payload)
+(defun authorization-header (access-key key credential-scope date region service request-method path params headers payload)
   (multiple-value-bind (creq singed-headers)
       (create-canonical-request 
                 request-method path params headers
                 (sb-ext:string-to-octets  payload :external-format :utf-8))
-    (let* ((sts (string-to-sign 
-                 creq 
-                 (cadr (assoc "X-Amz-Date" headers :test #'equalp))
-                 credential))
+    (let* ((sts (string-to-sign (cadr (assoc "X-Amz-Date" headers :test #'equalp))
+                                credential-scope
+                                creq))
            (signature 
             (calculate-signature 
              key
              sts
-             credential)))
+             date
+             region
+             service)))
       (values
        (format nil 
-               "AWS4-HMAC-SHA256 Credential=~A, SignedHeaders=~A, Signature=~A"
-               credential
+               "AWS4-HMAC-SHA256 Credential=~A/~A, SignedHeaders=~A, Signature=~A"
+               access-key
+               credential-scope
                singed-headers
                (ironclad:byte-array-to-hex-string  signature))
        creq
@@ -205,6 +201,10 @@
 
 (defun aws-request2 (region service endpoint path x-amz-target content-type payload)
   (let* ((dateobj (local-time:now))
+         (date (local-time:format-timestring nil dateobj
+                                             :format '((:YEAR 4) (:MONTH 2) (:DAY 2))))
+         (region (string-downcase region))
+         (service (string-downcase service))
          (additional-headers
           (list (cons "x-amz-target" x-amz-target)
                 (cons "x-amz-date"
@@ -216,14 +216,12 @@
       (error "AWS credentials missing"))
     (let ((authorization-header
            (authorization-header
+            (car *credentials*)
             (cadr *credentials*)
-            (format nil
-                    "~A/~A/~A/~A/aws4_request"
-                    (car *credentials*)
-                    (local-time:format-timestring nil dateobj
-                                                  :format '((:YEAR 4) (:MONTH 2) (:DAY 2)))
-                    (string-downcase region)
-                    (string-downcase service))
+            (format nil "~A/~A/~A/aws4_request" date region service)
+            date
+            region
+            service
             :post
             path
             nil
