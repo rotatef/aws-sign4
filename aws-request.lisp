@@ -43,32 +43,21 @@
                          do (format s "%~2,'0x" octet)))))))
 
 (defun create-canonical-path (path)
-  (labels ((helper (rest)
-             (cond 
-               ((null rest) nil)
-               ((string= (car rest) "..")
-                (helper (cdr (helper (cdr rest)))))
-               ((string= (car rest) ".")
-                (helper (cdr rest)))
-               (t (cons (car rest)
-                        (helper (cdr rest)))))))
-    (let* ((splitted
-            (loop for x on 
-                 (cdr
-                  (split-sequence:split-sequence #\/ path))
-               unless (and (string= (car x) "")
-                           (cdr x))
-               collect (car x)))
-          (res (reverse 
-                (helper
-                 (reverse splitted)))))
-      (format nil "/~{~A~^/~}" 
-               (mapcar (lambda (x)
-                         (url-encode 
-                          x
-                          :external-format :latin-1
-                          :escape nil))
-                       res)))))
+  (labels ((remove-dots (path)
+             (cond ((null path) nil)
+               ((string= (car path) "..")
+                (cdr (remove-dots (cdr path))))
+               ((string= (car path) ".")
+                (remove-dots (cdr path)))
+               (t (cons (car path)
+                        (remove-dots (cdr path)))))))
+    (format nil "/~{~A~^/~}"
+            (mapcar (lambda (x)
+                      (url-encode x :escape nil))
+                    (reverse
+                     (remove-dots
+                      (reverse (split-sequence:split-sequence #\/ path :remove-empty-subseqs t))))))))
+
 (defun merge-duplicates* (list)
   (when list
     (let* ((rest (merge-duplicates (cdr list)))
