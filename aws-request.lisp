@@ -20,9 +20,8 @@
 (defun initialize (credentials)
   (setf *credentials* credentials))
 
-(defun url-encode (string &key (external-format :utf-8)
-                               (escape t))
-  "URL-encodes a string using the external format EXTERNAL-FORMAT."
+(defun url-encode (string &key (escape t))
+  "URL-encodes a string using the external UTF-8."
   (with-output-to-string (s)
     (loop for c across string
           for index from 0
@@ -35,12 +34,9 @@
                    ((and (not escape)
                          (char= #\% c))
                     (write-char c s))
-                   (t (loop for octet across 
-                           (string-to-octets string
-                                             :start index
-                                             :end (1+ index)
-                                             :external-format external-format)
-                         do (format s "%~2,'0x" octet)))))))
+                   (t (loop for octet across
+                            (ensure-octets (string (char string index)))
+                            do (format s "%~2,'0x" octet)))))))
 
 (defun create-canonical-path (path)
   (labels ((remove-dots (path)
@@ -59,29 +55,11 @@
                       (reverse (split-sequence:split-sequence #\/ path :remove-empty-subseqs t))))))))
 
 (defun create-canonical-query-string (params)
-  (with-output-to-string (str)
-    (labels ((getkey (v &optional (car nil))
-               (when car
-                 (setf v (car v)))
-               (when (symbolp v)
-                 (setf v (symbol-name v)))
-               (string-downcase v)))
-      (loop for x on (sort (copy-list params) #'string< :key (lambda (x)
-                                                               (format nil "~S~S"
-                                                                       (getkey x t)
-                                                                       (cdr x)
-                                                                       )))
-            for (key value) = (car x)
-            do (format str "~A=~A~A"
-                       (url-encode key)
-                       (url-encode value)
-                       (if (cdr x)
-                           "&" ""))))))
-
-
-
-
-
+  (format nil "~{~{~A=~A~}~^&~}"
+          (sort (loop for (key . value) in params
+                      collect (list (url-encode (string key)) (url-encode value)))
+                #'string<
+                :key #'car)))
 
 (defun trimall (string)
   (string-trim '(#\Space #\Tab) string))
