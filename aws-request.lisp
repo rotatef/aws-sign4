@@ -146,14 +146,7 @@
          (subseq credential (1+ (position #\/ credential)))))
     (with-output-to-string (str)
       (format str "AWS4-HMAC-SHA256~%")
-      (local-time:format-timestring str 
-                                    (if (stringp request-date)
-                                        (local-time:universal-to-timestamp 
-                                         (net.telent.date:parse-time request-date))
-                                        request-date)
-                                    :format +iso-8601-basic-format+
-                                    :timezone (local-time:find-timezone-by-location-name "GMT"))
-      (write-line "" str)
+      (write-line request-date str)
       (write-line credential-scope str)
       (write-string (ironclad:byte-array-to-hex-string 
                      (ironclad:digest-sequence 
@@ -195,16 +188,14 @@
        (calculate-derived-key key date region service)
        (sb-ext:string-to-octets string-to-sign :external-format :utf-8)))))
 
-(defun authorization-header (key credential request-method path params headers payload &optional date)
+(defun authorization-header (key credential request-method path params headers payload)
   (multiple-value-bind (creq singed-headers)
       (create-canonical-request 
                 request-method path params headers
                 (sb-ext:string-to-octets  payload :external-format :utf-8))
     (let* ((sts (string-to-sign 
                  creq 
-                 (or date
-                     (cadr (assoc "Date" headers :test #'equalp))
-                     (cadr (assoc "X-Amz-Date" headers :test #'equalp)))
+                 (cadr (assoc "X-Amz-Date" headers :test #'equalp))
                  credential))
            (signature 
             (calculate-signature 
@@ -254,8 +245,7 @@
                       ("Content-Type" ,content-type))
                     (loop for x in additional-headers
                           collect (list (car x) (cdr x))))
-            payload
-            dateobj)))
+            payload)))
       (push
        (cons "Authorization"
              authorization-header)
