@@ -11,12 +11,6 @@
   (ironclad:byte-array-to-hex-string bytes))
 
 
-
-(defparameter +iso-8601-basic-format+
-  '((:year 4) (:month 2) (:day 2) #\T
-    (:hour 2) (:min 2) (:sec 2) 
-    :gmt-offset-or-z))
-
 (defvar *credentials* nil)
 
 (defun file-credentials (file)
@@ -188,20 +182,21 @@
        creq
        sts))))
 
+(defun x-amz-date ()
+  (local-time:format-timestring nil
+                                (local-time:now)
+                                :format '((:year 4) (:month 2) (:day 2) #\T
+                                          (:hour 2) (:min 2) (:sec 2)
+                                          :gmt-offset-or-z)
+                                :timezone local-time:+utc-zone+))
 
 (defun aws-request2 (region service endpoint path x-amz-target content-type payload)
-  (let* ((dateobj (local-time:now))
-         (date (local-time:format-timestring nil dateobj
-                                             :format '((:YEAR 4) (:MONTH 2) (:DAY 2))))
+  (let* ((x-amz-date (x-amz-date))
+         (date (subseq x-amz-date 0 8))
          (region (string-downcase region))
          (service (string-downcase service))
-         (additional-headers
-          (list (cons "x-amz-target" x-amz-target)
-                (cons "x-amz-date"
-                      (local-time:format-timestring nil
-                                                    dateobj
-                                                    :format +iso-8601-basic-format+
-                                                    :timezone local-time:+utc-zone+)))))
+         (additional-headers `(("x-amz-target" . ,x-amz-target)
+                               ("x-amz-date" . ,x-amz-date))))
     (unless *credentials*
       (error "AWS credentials missing"))
     (let ((authorization-header
