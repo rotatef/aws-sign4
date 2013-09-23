@@ -141,10 +141,11 @@
          (k-signing (hmac k-service "aws4_request")))
     (hex-encode (hmac k-signing string-to-sign))))
 
-(defun authorization-header (access-key key credential-scope date region service request-method path params headers payload)
+(defun authorization-header (access-key key x-amz-date date region service request-method path params headers payload)
   (multiple-value-bind (creq singed-headers)
       (create-canonical-request request-method path params headers payload)
-    (let* ((sts (string-to-sign (cdr (assoc "X-Amz-Date" headers :test #'equalp))
+    (let* ((credential-scope (format nil "~A/~A/~A/aws4_request" date region service))
+           (sts (string-to-sign x-amz-date
                                 credential-scope
                                 creq))
            (signature
@@ -185,7 +186,7 @@
            (authorization-header
             (car *credentials*)
             (cadr *credentials*)
-            (format nil "~A/~A/~A/aws4_request" date region service)
+            x-amz-date
             date
             region
             service
