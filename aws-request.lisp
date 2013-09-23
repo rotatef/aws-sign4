@@ -3,12 +3,6 @@
     (:hour 2) (:min 2) (:sec 2) 
     :gmt-offset-or-z))
 
-(defvar *swf-endpoints* 
-  '((:us-east-1 . "swf.us-east-1.amazonaws.com")
-    (:us-west-1 . "swf.us-west-1.amazonaws.com")
-    (:us-west-2 . "swf.us-west-2.amazonaws.com")
-    (:eu-west-1 . "swf.eu-west-1.amazonaws.com")))
-
 (defvar *credentials* nil)
 
 (defun file-credentials (file)
@@ -209,8 +203,7 @@
        sts))))
 
 
-(defun aws-request2 (endpoint path x-amz-target content-type payload)
-  (check-type endpoint (member :us-east-1 :us-west-1 :us-west-2 :eu-west-1))
+(defun aws-request2 (region service endpoint path x-amz-target content-type payload)
   (let* ((dateobj (local-time:now))
          (additional-headers
           (list (cons "x-amz-target" x-amz-target)
@@ -225,17 +218,16 @@
            (authorization-header
             (cadr *credentials*)
             (format nil
-                    "~A/~A/~A/swf/aws4_request"
+                    "~A/~A/~A/~A/aws4_request"
                     (car *credentials*)
-                    (local-time:format-timestring
-                     nil dateobj
-                     :format '((:YEAR 4) (:MONTH 2) (:DAY 2)))
-                    (string-downcase (symbol-name endpoint))
-                    )
+                    (local-time:format-timestring nil dateobj
+                                                  :format '((:YEAR 4) (:MONTH 2) (:DAY 2)))
+                    (string-downcase region)
+                    (string-downcase service))
             :post
             path
             nil
-            (append `(( "host" ,(cdr (assoc endpoint *swf-endpoints*)))
+            (append `(( "host" ,endpoint)
                       ("Content-Type" ,content-type))
                     (loop for x in additional-headers
                           collect (list (car x) (cdr x))))
@@ -246,7 +238,7 @@
        additional-headers)
       (multiple-value-bind (body status-code)
           (drakma:http-request
-           (format nil "http://~A~A" (cdr (assoc endpoint *swf-endpoints*)) path)
+           (format nil "http://~A~A" endpoint path)
            :method :post
            :additional-headers additional-headers
            :content payload
@@ -259,3 +251,5 @@
 
 
 (initialize (file-credentials "~/.aws"))
+
+;(aws-request2 :eu-west-1 :swf "swf.eu-west-1.amazonaws.com" "/" "SimpleWorkflowService.ListDomains" "application/x-amz-json-1.0" "{\"registrationStatus\":\"REGISTERED\"}")
