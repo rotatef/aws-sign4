@@ -211,7 +211,7 @@
 
 (defun aws-request2 (endpoint path x-amz-target content-type payload)
   (check-type endpoint (member :us-east-1 :us-west-1 :us-west-2 :eu-west-1))
-  (let* ((dateobj (local-time:now)) 
+  (let* ((dateobj (local-time:now))
          (additional-headers
           (list (cons "x-amz-target" x-amz-target)
                 (cons "x-amz-date"
