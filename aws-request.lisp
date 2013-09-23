@@ -4,9 +4,8 @@
       data))
 
 (defun hash (data)
-  (ironclad:digest-sequence :sha256
-                            (sb-ext:string-to-octets data
-                                                     :external-format :utf-8)))
+  (ironclad:digest-sequence :sha256 data))
+
 (defun hex-encode (bytes)
   (ironclad:byte-array-to-hex-string bytes))
 
@@ -105,7 +104,7 @@
     (write-line "AWS4-HMAC-SHA256" str)
     (write-line request-date str)
     (write-line credential-scope str)
-    (write-string (hex-encode (hash canonical-request)) str)))
+    (write-string (hex-encode (hash (ensure-octets canonical-request))) str)))
 
 (defun hmac (key data)
   (let ((hmac (ironclad:make-hmac (ensure-octets key) :sha256)))
@@ -151,7 +150,7 @@
                                           :gmt-offset-or-z)
                                 :timezone local-time:+utc-zone+))
 
-(defun aws-request2 (region service method endpoint path x-amz-target content-type payload)
+(defun aws-request (region service method endpoint path x-amz-target content-type payload)
   (let* ((x-amz-date (x-amz-date))
          (date (subseq x-amz-date 0 8))
          (region (string-downcase region))
@@ -186,13 +185,24 @@
            :additional-headers additional-headers
            :content payload
            :content-type content-type)
-        (values
-         (when body
-           (sb-ext:octets-to-string
-            body))
-         status-code)))))
+        (values body status-code)))))
 
+(defun swf-request (region action payload)
+  (multiple-value-bind (body status-code)
+      (aws-request region
+                   :swf
+                   :post
+                   (format nil "swf.~(~A~).amazonaws.com" region)
+                   "/"
+                   (format nil "SimpleWorkflowService.~A" action)
+                   "application/x-amz-json-1.0"
+                   (sb-ext:string-to-octets payload))
+    (values (when body
+              (sb-ext:octets-to-string body))
+            status-code)))
 
 (initialize (file-credentials "~/.aws"))
 
-;(aws-request2 :eu-west-1 :swf :post "swf.eu-west-1.amazonaws.com" "/" "SimpleWorkflowService.ListDomains" "application/x-amz-json-1.0" "{\"registrationStatus\":\"REGISTERED\"}")
+;(aws-request :eu-west-1 :swf :post "swf.eu-west-1.amazonaws.com" "/" "SimpleWorkflowService.ListDomains" "application/x-amz-json-1.0" "{\"registrationStatus\":\"REGISTERED\"}")
+
+; (swf-request :eu-west-1 "ListDomains" "{\"registrationStatus\":\"REGISTERED\"}")
