@@ -1,12 +1,3 @@
-(ql:quickload "local-time")
-(ql:quickload "drakma")
-(ql:quickload "ironclad")
-(ql:quickload "hunchentoot")
-(ql:quickload "split-sequence")
-(ql:quickload "net-telent-date")
-
-(initialize (file-credentials "~/.aws"))
-
 (defparameter +iso-8601-basic-format+
   '((:year 4) (:month 2) (:day 2) #\T
     (:hour 2) (:min 2) (:sec 2) 
@@ -285,3 +276,6 @@
                                         ;creq 
                                         ;sts
          )))))
+
+
+(initialize (file-credentials "~/.aws"))
