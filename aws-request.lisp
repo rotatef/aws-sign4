@@ -1,3 +1,17 @@
+(defun ensure-octets (data)
+  (if (stringp data)
+      (sb-ext:string-to-octets data :external-format :utf-8)
+      data))
+
+(defun hash (data)
+  (ironclad:digest-sequence :sha256
+                            (sb-ext:string-to-octets data
+                                                     :external-format :utf-8)))
+(defun hex-encode (bytes)
+  (ironclad:byte-array-to-hex-string bytes))
+
+
+
 (defparameter +iso-8601-basic-format+
   '((:year 4) (:month 2) (:day 2) #\T
     (:hour 2) (:min 2) (:sec 2) 
@@ -82,6 +96,8 @@
   (reverse (merge-duplicates* (reverse list))))
 
 
+
+
 (defun create-canonical-request (request-method path params headers payload)
   (labels ((getkey (v &optional (car nil))
              (when car
@@ -126,16 +142,9 @@
                      ))
        (write-line "" str)
        (signed-headers str)
-       (write-string (ironclad:byte-array-to-hex-string (ironclad:digest-sequence :sha256 payload)) str))
+       (write-string (hex-encode (hash payload)) str))
      (signed-headers nil nil)
      )))
-
-(defun hash (data)
-  (ironclad:digest-sequence :sha256
-                            (sb-ext:string-to-octets data
-                                                     :external-format :utf-8)))
-(defun hex-encode (bytes)
-  (ironclad:byte-array-to-hex-string bytes))
 
 (defun string-to-sign (request-date credential-scope canonical-request)
   (with-output-to-string (str)
@@ -143,11 +152,6 @@
     (write-line request-date str)
     (write-line credential-scope str)
     (write-string (hex-encode (hash canonical-request)) str)))
-
-(defun ensure-octets (data)
-  (if (stringp data)
-      (sb-ext:string-to-octets data :external-format :utf-8)
-      data))
 
 (defun hmac (key data)
   (let ((hmac (ironclad:make-hmac (ensure-octets key) :sha256)))
@@ -163,9 +167,7 @@
 
 (defun authorization-header (access-key key credential-scope date region service request-method path params headers payload)
   (multiple-value-bind (creq singed-headers)
-      (create-canonical-request
-                request-method path params headers
-                (sb-ext:string-to-octets  payload :external-format :utf-8))
+      (create-canonical-request request-method path params headers payload)
     (let* ((sts (string-to-sign (cadr (assoc "X-Amz-Date" headers :test #'equalp))
                                 credential-scope
                                 creq))
