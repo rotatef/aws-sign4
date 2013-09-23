@@ -139,9 +139,6 @@
 (defvar *timezonereg-read* nil)
 
 (defun string-to-sign (canonical-request request-date credential)
-  (unless *timezonereg-read*
-    (local-time::reread-timezone-repository)
-    (setf *timezonereg-read* t))
   (let ((credential-scope
          (subseq credential (1+ (position #\/ credential)))))
     (with-output-to-string (str)
@@ -215,16 +212,13 @@
 (defun aws-request2 (endpoint path x-amz-target content-type payload)
   (check-type endpoint (member :us-east-1 :us-west-1 :us-west-2 :eu-west-1))
   (let* ((dateobj (local-time:now)) 
-         (date (local-time:format-rfc1123-timestring 
-                nil dateobj))
          (additional-headers
           (list (cons "x-amz-target" x-amz-target)
-                (cons "Date" date)
                 (cons "x-amz-date"
-                      (local-time:format-timestring
-                       nil dateobj
-                       :format +iso-8601-basic-format+
-                       :timezone local-time:+utc-zone+)))))
+                      (local-time:format-timestring nil
+                                                    dateobj
+                                                    :format +iso-8601-basic-format+
+                                                    :timezone local-time:+utc-zone+)))))
     (unless *credentials*
       (error "AWS credentials missing"))
     (let ((authorization-header
