@@ -38,20 +38,22 @@
                             do (format s "%~2,'0x" octet)))))))
 
 (defun create-canonical-path (path)
-  (labels ((remove-dots (path)
-             (cond ((null path) nil)
-               ((string= (car path) "..")
-                (cdr (remove-dots (cdr path))))
-               ((string= (car path) ".")
-                (remove-dots (cdr path)))
-               (t (cons (car path)
-                        (remove-dots (cdr path)))))))
+  (let ((input (split-sequence:split-sequence #\/ path))
+        (output nil))
+    (loop while input do
+          (cond ((or (string= (car input) "")
+                     (string= (car input) "."))
+                 (unless (cdr input)
+                   (push "" output)))
+                ((string= (car input) "..")
+                 (pop output))
+                (t
+                 (push (car input) output)))
+          (pop input))
     (format nil "/~{~A~^/~}"
             (mapcar (lambda (x)
                       (url-encode x :escape nil))
-                    (reverse
-                     (remove-dots
-                      (reverse (split-sequence:split-sequence #\/ path :remove-empty-subseqs t))))))))
+                    (reverse output)))))
 
 (defun create-canonical-query-string (params)
   (format nil "~{~{~A=~A~}~^&~}"
