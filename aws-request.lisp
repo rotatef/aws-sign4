@@ -194,13 +194,12 @@
                                  (:content-type . ,content-type))
                                payload)))
     (multiple-value-bind (body status-code)
-        (drakma:http-request
-         (format nil "http://~A~A" endpoint path)
-         :method method
-         :additional-headers `((:x-amz-target . ,x-amz-target)
-                               ,@aws-headers)
-         :content payload
-         :content-type content-type)
+        (drakma:http-request (format nil "http://~A~A" endpoint path)
+                             :method method
+                             :additional-headers `((:x-amz-target . ,x-amz-target)
+                                                   ,@aws-headers)
+                             :content payload
+                             :content-type content-type)
       (values body status-code))))
 
 (defun swf-request (region action payload)
