@@ -142,28 +142,29 @@
        creq
        sts))))
 
-(defun x-amz-date ()
+(defun x-amz-date (date)
   (local-time:format-timestring nil
-                                (local-time:now)
+                                date
                                 :format '((:year 4) (:month 2) (:day 2) #\T
                                           (:hour 2) (:min 2) (:sec 2)
                                           :gmt-offset-or-z)
                                 :timezone local-time:+utc-zone+))
 
-(defun aws-auth (region service method endpoint path params headers payload)
+(defun aws-auth (region service method endpoint path params headers payload
+                 &key (date (local-time:now)) (have-x-amz-date t))
   (unless *credentials*
     (error "AWS credentials missing"))
   (let* ((access-key (first *credentials*))
          (private-key (second *credentials*))
-         (x-amz-date (x-amz-date))
+         (x-amz-date (x-amz-date date))
          (date (subseq x-amz-date 0 8))
          (method (string method))
          (region (string-downcase region))
          (service (string-downcase service)))
     (multiple-value-bind (creq singed-headers)
         (create-canonical-request method path params
-                                  `(("X-Amz-Date" . ,x-amz-date)
-                                    ("host" . ,endpoint)
+                                  `(,@(when have-x-amz-date `(("X-Amz-Date" . ,x-amz-date)))
+                                      ,@(unless (assoc "host" headers :test #'string-equal) `(("host" . ,endpoint)))
                                     ,@headers)
                                   payload)
       (let* ((credential-scope (format nil "~A/~A/~A/aws4_request" date region service))
@@ -175,13 +176,16 @@
                                              date
                                              region
                                              service)))
-        `(("X-Amz-Date" . ,x-amz-date)
-          ("Authorization" . ,(format nil
-                                      "AWS4-HMAC-SHA256 Credential=~A/~A, SignedHeaders=~A, Signature=~A"
-                                      access-key
-                                      credential-scope
-                                      singed-headers
-                                      signature)))))))
+        (values
+         `(,@(when have-x-amz-date `(("X-Amz-Date" . ,x-amz-date)))
+           ("Authorization" . ,(format nil
+                                       "AWS4-HMAC-SHA256 Credential=~A/~A, SignedHeaders=~A, Signature=~A"
+                                       access-key
+                                       credential-scope
+                                       singed-headers
+                                       signature)))
+         creq
+         sts)))))
 
 (defun aws-request (region service method endpoint path x-amz-target content-type payload)
   (let ((aws-headers (aws-auth region

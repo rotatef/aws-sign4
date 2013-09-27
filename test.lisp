@@ -39,7 +39,24 @@
         :authz (file-content (make-pathname :type "authz" :defaults filename))))
 
 (defun do-test (&key name req creq sts authz)
-  (format t "~&Test: ~A~%~%" name))
+  (format t "~%Test: ~A~%~S~%" name req)
+  (multiple-value-bind (my-headers my-creq my-sts)
+      (aws-auth :us-east-1
+                :host
+                (getf req :method)
+                "host.foo.com"
+                (getf req :uri)
+                nil ; todo query params
+                (getf req :headers)
+                (getf req :content)
+                :date (local-time:parse-timestring "2011-09-09T23:36:00Z")
+                :have-x-amz-date nil)
+    (unless (string= creq my-creq)
+      (format t "Expected creq:~%~S~%~%Got:~%~S~%" creq my-creq)
+      (break))
+    (unless (string= sts my-sts)
+      (format t "Expected sts:~%~A~%~%Got:~%~A~%" sts my-sts)
+      (break))))
 
 (defun test ()
   (dolist (req (directory "/home/thomasb/work/scratch/aws4-sign/aws4_testsuite/*.req"))
