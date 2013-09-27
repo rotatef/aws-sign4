@@ -67,16 +67,17 @@
   (loop for header = (pop headers)
         while header
         collect `(,(car header)
-                   ,(cdr header)
-                   ,@(loop while (equal (car header) (caar headers))
-                           collect (cdr (pop headers))))))
+                  ,@(sort (cons (cdr header)
+                                (loop while (equal (car header) (caar headers))
+                                      collect (cdr (pop headers))))
+                          #'string<))))
 
 (defun create-canonical-headers (headers)
   (merge-duplicate-headers
-   (stable-sort (loop for (key . value) in headers
-                      collect (cons (string-downcase key) (trimall value)))
-                #'string<
-                :key #'car)))
+   (sort (loop for (key . value) in headers
+               collect (cons (string-downcase key) (trimall value)))
+         #'string<
+         :key #'car)))
 
 
 (defun create-canonical-request (request-method path params headers payload)
