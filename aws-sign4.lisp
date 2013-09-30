@@ -129,6 +129,9 @@
          (k-signing (hmac k-service "aws4_request")))
     (hex-encode (hmac k-signing string-to-sign))))
 
+(defun parse-date (string)
+  (local-time:universal-to-timestamp (net.telent.date:parse-time string)))
+
 (defvar *aws-credentials* nil)
 
 (defun get-credentials ()
@@ -143,45 +146,50 @@
                     host
                     path
                     params
-                    (request-date (local-time:now) request-date-p)
                     headers
                     payload)
   (multiple-value-bind (access-key private-key)
       (get-credentials)
-    (let* ((x-amz-date (local-time:format-timestring nil
-                                                     request-date
-                                                     :format '((:year 4) (:month 2) (:day 2) #\T
-                                                               (:hour 2) (:min 2) (:sec 2)
-                                                               :gmt-offset-or-z)
-                                                     :timezone local-time:+utc-zone+))
-           (scope-date (subseq x-amz-date 0 8))
-           (region (string-downcase region))
-           (service (string-downcase service))
-           (credential-scope (format nil "~A/~A/~A/aws4_request" scope-date region service)))
-      (unless (assoc "host" headers :test #'string-equal)
-        (push (cons :host host) headers))
-      (unless request-date-p
-        (push (cons :x-amz-date x-amz-date) headers))
-      (multiple-value-bind (creq singed-headers)
-          (create-canonical-request method path params headers payload)
-        (let* ((sts (string-to-sign x-amz-date
-                                    credential-scope
-                                    creq))
-               (signature (calculate-signature private-key
-                                               sts
-                                               scope-date
-                                               region
-                                               service)))
-          (values
-           (format nil
-                   "AWS4-HMAC-SHA256 Credential=~A/~A, SignedHeaders=~A, Signature=~A"
-                   access-key
-                   credential-scope
-                   singed-headers
-                   signature)
-           x-amz-date
-           creq
-           sts
-           credential-scope
-           singed-headers
-           signature))))))
+    (labels ((get-header (key)
+               (cdr (assoc key headers :test #'string-equal))))
+      (let* ((host (or host (get-header :host)))
+             (date-header (get-header :date))
+             (x-amz-date (local-time:format-timestring nil
+                                                       (if date-header
+                                                           (parse-date date-header)
+                                                           (local-time:now))
+                                                       :format '((:year 4) (:month 2) (:day 2) #\T
+                                                                 (:hour 2) (:min 2) (:sec 2)
+                                                                 :gmt-offset-or-z)
+                                                       :timezone local-time:+utc-zone+))
+             (scope-date (subseq x-amz-date 0 8))
+             (region (string-downcase region))
+             (service (string-downcase service))
+             (credential-scope (format nil "~A/~A/~A/aws4_request" scope-date region service)))
+        (unless (get-header :host)
+          (push (cons :host host) headers))
+        (unless date-header
+          (push (cons :x-amz-date x-amz-date) headers))
+        (multiple-value-bind (creq singed-headers)
+            (create-canonical-request method path params headers payload)
+          (let* ((sts (string-to-sign x-amz-date
+                                      credential-scope
+                                      creq))
+                 (signature (calculate-signature private-key
+                                                 sts
+                                                 scope-date
+                                                 region
+                                                 service)))
+            (values
+             (format nil
+                     "AWS4-HMAC-SHA256 Credential=~A/~A, SignedHeaders=~A, Signature=~A"
+                     access-key
+                     credential-scope
+                     singed-headers
+                     signature)
+             x-amz-date
+             creq
+             sts
+             credential-scope
+             singed-headers
+             signature)))))))
