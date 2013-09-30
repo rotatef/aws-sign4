@@ -2,7 +2,7 @@
 
 (defun ensure-octets (data)
   (if (stringp data)
-      (sb-ext:string-to-octets data :external-format :utf-8)
+      (flex:string-to-octets data :external-format :utf-8)
       data))
 
 (defun hash (data)
