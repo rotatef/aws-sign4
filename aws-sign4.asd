@@ -21,8 +21,7 @@
   :depends-on (:local-time
                :ironclad
                :split-sequence
-               :flexi-streams
-               :drakma)
+               :flexi-streams)
   :serial t
   :components ((:file "package")
                (:file "aws-sign4")))

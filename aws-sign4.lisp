@@ -190,4 +190,7 @@
                    singed-headers
                    signature)
            creq
-           sts))))))
+           sts
+           credential-scope
+           singed-headers
+           signature))))))
