@@ -1,3 +1,5 @@
+(in-package :aws-sign4)
+
 (defun ensure-octets (data)
   (if (stringp data)
       (sb-ext:string-to-octets data :external-format :utf-8)
@@ -152,8 +154,8 @@
                                           :gmt-offset-or-z)
                                 :timezone local-time:+utc-zone+))
 
-(defun aws-auth (region service method endpoint path params headers payload
-                 &key (date (local-time:now)) (have-x-amz-date t))
+(defun aws-sign4 (region service method endpoint path params headers payload
+                  &key (date (local-time:now)) (have-x-amz-date t))
   (unless *credentials*
     (error "AWS credentials missing"))
   (let* ((access-key (first *credentials*))

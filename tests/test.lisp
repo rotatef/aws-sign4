@@ -1,3 +1,5 @@
+(in-package :aws-sign4-tests)
+
 (defun file-content (filename)
   (with-open-file (bin filename :element-type 'flex:octet)
     (with-open-stream (in (flex:make-flexi-stream bin :external-format '(:utf-8 :eol-style :crlf)))
@@ -76,16 +78,16 @@
 (defun do-test (&key name req creq sts authz)
   (format t "~%Test: ~A~%~S~%" name req)
   (multiple-value-bind (my-headers my-creq my-sts)
-      (aws-auth :us-east-1
-                :host
-                (getf req :method)
-                "host.foo.com"
-                (getf req :path)
-                (getf req :params)
-                (getf req :headers)
-                (getf req :content)
-                :date (local-time:parse-timestring "2011-09-09T23:36:00Z")
-                :have-x-amz-date nil)
+      (aws-sign4:aws-sign4 :us-east-1
+                           :host
+                           (getf req :method)
+                           "host.foo.com"
+                           (getf req :path)
+                           (getf req :params)
+                           (getf req :headers)
+                           (getf req :content)
+                           :date (local-time:parse-timestring "2011-09-09T23:36:00Z")
+                           :have-x-amz-date nil)
     (unless (string= creq my-creq)
       (format t "Expected creq:~%~S~%~%Got:~%~S~%" creq my-creq)
       (break))
@@ -93,7 +95,8 @@
       (format t "Expected sts:~%~A~%~%Got:~%~A~%" sts my-sts)
       (break))))
 
-(defun test ()
-  (dolist (req (directory "/home/thomasb/work/scratch/aws4-sign/aws4_testsuite/*.req"))
+(defun run-tests ()
+  (dolist (req (directory (merge-pathnames (asdf:system-relative-pathname :aws-sign4 "tests/aws4_testsuite/")
+                                           "*.req")))
     (apply #'do-test (load-test req))))
 
