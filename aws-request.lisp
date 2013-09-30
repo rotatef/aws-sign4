@@ -56,11 +56,10 @@
                     (reverse output)))))
 
 (defun create-canonical-query-string (params)
-  (format nil "~{~{~A=~A~}~^&~}"
+  (format nil "~{~A~^&~}"
           (sort (loop for (key . value) in params
-                      collect (list (url-encode (string key)) (url-encode value)))
-                #'string<
-                :key #'car)))
+                      collect (format nil "~A=~A" (url-encode (string key)) (url-encode value)))
+                #'string<)))
 
 (defun trimall (string)
   (string-trim '(#\Space #\Tab) string))

@@ -17,9 +17,13 @@
       (let* ((req-line (read-line in))
              (method-end (position #\Space req-line))
              (uri-start (1+ method-end))
-             (uri-end (position #\Space req-line :start uri-start)))
+             (uri-end (position #\Space req-line :start uri-start))
+             (q-pos (position #\? req-line :start uri-start))
+             (path-end (or q-pos uri-end))
+             (query-start (when q-pos (1+ q-pos))))
         (list :method (intern (subseq req-line 0 method-end) :keyword)
-              :uri (subseq req-line uri-start uri-end)
+              :path (subseq req-line uri-start path-end)
+              :params (when query-start (query-decode (subseq req-line query-start uri-end)))
               :headers (loop for header = (read-line in)
                              until (string= "" header)
                              collect (let ((colon-pos (position #\: header)))
@@ -38,6 +42,37 @@
         :sts (file-content (make-pathname :type "sts" :defaults filename))
         :authz (file-content (make-pathname :type "authz" :defaults filename))))
 
+(defun uri-decode (string)
+  (flex:octets-to-string
+   (loop with pos = 0
+         while (< pos (length string))
+         collect (cond ((char= #\% (char string pos))
+                        (let ((code (ignore-errors (parse-integer string
+                                                                  :start (+ 1 pos)
+                                                                  :end (+ 3 pos)
+                                                                  :radix 15))))
+                          (cond (code
+                                 (incf pos 3)
+                                 code)
+                                (t
+                                 (incf pos)
+                                 (char-code #\%)))))
+                       ((char= #\+ (char string pos))
+                        (incf pos)
+                        32)
+                       (t
+                        (incf pos)
+                        (char-code (char string (1- pos))))))
+   :external-format :utf-8))
+
+(defun query-decode (string)
+  (loop for kv in (split-sequence:split-sequence #\& string)
+        for key-end = (position #\= kv)
+        collect (if key-end
+                    (cons (uri-decode (subseq kv 0 key-end))
+                          (uri-decode (subseq kv (1+ key-end))))
+                    (cons (uri-decode kv) ""))))
+
 (defun do-test (&key name req creq sts authz)
   (format t "~%Test: ~A~%~S~%" name req)
   (multiple-value-bind (my-headers my-creq my-sts)
@@ -45,8 +80,8 @@
                 :host
                 (getf req :method)
                 "host.foo.com"
-                (getf req :uri)
-                nil ; todo query params
+                (getf req :path)
+                (getf req :params)
                 (getf req :headers)
                 (getf req :content)
                 :date (local-time:parse-timestring "2011-09-09T23:36:00Z")
