@@ -90,7 +90,7 @@
               ;; SignedHeaders
               (write-line signed-headers str)
               ;; Payload
-              (write-string (hex-encode (hash payload)) str))
+              (write-string (hex-encode (hash (ensure-octets payload))) str))
             signed-headers)))
 
 (defun string-to-sign (request-date credential-scope canonical-request)
@@ -112,38 +112,6 @@
          (k-signing (hmac k-service "aws4_request")))
     (hex-encode (hmac k-signing string-to-sign))))
 
-(defun authorization-header (access-key key x-amz-date date region service request-method path params headers payload)
-  (multiple-value-bind (creq singed-headers)
-      (create-canonical-request request-method path params headers payload)
-    (let* ((credential-scope (format nil "~A/~A/~A/aws4_request" date region service))
-           (sts (string-to-sign x-amz-date
-                                credential-scope
-                                creq))
-           (signature
-            (calculate-signature
-             key
-             sts
-             date
-             region
-             service)))
-      (values
-       (format nil
-               "AWS4-HMAC-SHA256 Credential=~A/~A, SignedHeaders=~A, Signature=~A"
-               access-key
-               credential-scope
-               singed-headers
-               signature)
-       creq
-       sts))))
-
-(defun x-amz-date (date)
-  (local-time:format-timestring nil
-                                date
-                                :format '((:year 4) (:month 2) (:day 2) #\T
-                                          (:hour 2) (:min 2) (:sec 2)
-                                          :gmt-offset-or-z)
-                                :timezone local-time:+utc-zone+))
-
 (defvar *aws-credentials* nil)
 
 (defun get-credentials ()
@@ -163,7 +131,12 @@
                     payload)
   (multiple-value-bind (access-key private-key)
       (get-credentials)
-    (let* ((x-amz-date (x-amz-date request-date))
+    (let* ((x-amz-date (local-time:format-timestring nil
+                                                     request-date
+                                                     :format '((:year 4) (:month 2) (:day 2) #\T
+                                                               (:hour 2) (:min 2) (:sec 2)
+                                                               :gmt-offset-or-z)
+                                                     :timezone local-time:+utc-zone+))
            (scope-date (subseq x-amz-date 0 8))
            (region (string-downcase region))
            (service (string-downcase service))
@@ -189,6 +162,7 @@
                    credential-scope
                    singed-headers
                    signature)
+           x-amz-date
            creq
            sts
            credential-scope

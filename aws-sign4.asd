@@ -26,6 +26,15 @@
   :components ((:file "package")
                (:file "aws-sign4")))
 
+(defsystem #:aws-sign4-example
+  :name "aws-sign4-example"
+  :licence "Example"
+  :depends-on (:aws-sign4 :drakma)
+  :components ((:module example
+                        :serial t
+                        :components ((:file "package")
+                                     (:file "example")))))
+
 (defsystem #:aws-sign4-tests
   :name "aws-sign4-tests"
   :licence "GNU General Public Licence 3.0"
