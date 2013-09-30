@@ -18,4 +18,5 @@
 (defpackage #:aws-sign4
   (:use :common-lisp)
   (:export
+   #:*aws-credentials*
    #:aws-sign4))

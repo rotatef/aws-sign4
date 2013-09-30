@@ -11,16 +11,6 @@
 (defun hex-encode (bytes)
   (ironclad:byte-array-to-hex-string bytes))
 
-
-(defvar *credentials* nil)
-
-(defun file-credentials (file)
-  (with-open-file (str file)
-    (list (read-line str) (read-line str))))
-
-(defun initialize (credentials)
-  (setf *credentials* credentials))
-
 (defun url-encode (string &key (escape t))
   "URL-encodes a string using the external UTF-8."
   (with-output-to-string (s)
@@ -83,12 +73,12 @@
          :key #'car)))
 
 
-(defun create-canonical-request (request-method path params headers payload)
+(defun create-canonical-request (method path params headers payload)
   (let* ((canonical-headers (create-canonical-headers headers))
          (signed-headers (format nil "~{~A~^;~}" (mapcar #'car canonical-headers))))
     (values (with-output-to-string (str)
               ;; HTTPRequestMethod:
-              (write-line request-method str)
+              (write-line (string-upcase method) str)
               ;; CanonicalURI:
               (write-line (create-canonical-path path) str)
               ;; CanonicalQueryString:
@@ -154,78 +144,50 @@
                                           :gmt-offset-or-z)
                                 :timezone local-time:+utc-zone+))
 
-(defun aws-sign4 (region service method endpoint path params headers payload
-                  &key (date (local-time:now)) (have-x-amz-date t))
-  (unless *credentials*
-    (error "AWS credentials missing"))
-  (let* ((access-key (first *credentials*))
-         (private-key (second *credentials*))
-         (x-amz-date (x-amz-date date))
-         (date (subseq x-amz-date 0 8))
-         (method (string method))
-         (region (string-downcase region))
-         (service (string-downcase service)))
-    (multiple-value-bind (creq singed-headers)
-        (create-canonical-request method path params
-                                  `(,@(when have-x-amz-date `(("X-Amz-Date" . ,x-amz-date)))
-                                      ,@(unless (assoc "host" headers :test #'string-equal) `(("host" . ,endpoint)))
-                                    ,@headers)
-                                  payload)
-      (let* ((credential-scope (format nil "~A/~A/~A/aws4_request" date region service))
-             (sts (string-to-sign x-amz-date
-                                  credential-scope
-                                  creq))
-             (signature (calculate-signature private-key
-                                             sts
-                                             date
-                                             region
-                                             service)))
-        (values
-         `(,@(when have-x-amz-date `(("X-Amz-Date" . ,x-amz-date)))
-           ("Authorization" . ,(format nil
-                                       "AWS4-HMAC-SHA256 Credential=~A/~A, SignedHeaders=~A, Signature=~A"
-                                       access-key
-                                       credential-scope
-                                       singed-headers
-                                       signature)))
-         creq
-         sts)))))
+(defvar *aws-credentials* nil)
 
-(defun aws-request (region service method endpoint path x-amz-target content-type payload)
-  (let ((aws-headers (aws-auth region
-                               service
-                               method
-                               endpoint
-                               path
-                               nil
-                               `(("x-amz-target" . ,x-amz-target)
-                                 (:content-type . ,content-type))
-                               payload)))
-    (multiple-value-bind (body status-code)
-        (drakma:http-request (format nil "http://~A~A" endpoint path)
-                             :method method
-                             :additional-headers `((:x-amz-target . ,x-amz-target)
-                                                   ,@aws-headers)
-                             :content payload
-                             :content-type content-type)
-      (values body status-code))))
+(defun get-credentials ()
+  (unless (functionp *aws-credentials*)
+    (error "Please bind *AWS-CREDENTIALS* to a function."))
+  (funcall *aws-credentials*))
 
-(defun swf-request (region action payload)
-  (multiple-value-bind (body status-code)
-      (aws-request region
-                   :swf
-                   :post
-                   (format nil "swf.~(~A~).amazonaws.com" region)
-                   "/"
-                   (format nil "SimpleWorkflowService.~A" action)
-                   "application/x-amz-json-1.0"
-                   (sb-ext:string-to-octets payload))
-    (values (when body
-              (sb-ext:octets-to-string body))
-            status-code)))
-
-(initialize (file-credentials "~/.aws"))
-
-;(aws-request :eu-west-1 :swf :post "swf.eu-west-1.amazonaws.com" "/" "SimpleWorkflowService.ListDomains" "application/x-amz-json-1.0" "{\"registrationStatus\":\"REGISTERED\"}")
-
-; (swf-request :eu-west-1 "ListDomains" "{\"registrationStatus\":\"REGISTERED\"}")
+(defun aws-sign4 (&key
+                    (region :us-east-1)
+                    service
+                    method
+                    host
+                    path
+                    params
+                    (request-date (local-time:now) request-date-p)
+                    headers
+                    payload)
+  (multiple-value-bind (access-key private-key)
+      (get-credentials)
+    (let* ((x-amz-date (x-amz-date request-date))
+           (scope-date (subseq x-amz-date 0 8))
+           (region (string-downcase region))
+           (service (string-downcase service))
+           (credential-scope (format nil "~A/~A/~A/aws4_request" scope-date region service)))
+      (unless (assoc "host" headers :test #'string-equal)
+        (push (cons :host host) headers))
+      (unless request-date-p
+        (push (cons :x-amz-date x-amz-date) headers))
+      (multiple-value-bind (creq singed-headers)
+          (create-canonical-request method path params headers payload)
+        (let* ((sts (string-to-sign x-amz-date
+                                    credential-scope
+                                    creq))
+               (signature (calculate-signature private-key
+                                               sts
+                                               scope-date
+                                               region
+                                               service)))
+          (values
+           (format nil
+                   "AWS4-HMAC-SHA256 Credential=~A/~A, SignedHeaders=~A, Signature=~A"
+                   access-key
+                   credential-scope
+                   singed-headers
+                   signature)
+           creq
+           sts))))))

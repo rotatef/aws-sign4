@@ -75,28 +75,31 @@
                           (uri-decode (subseq kv (1+ key-end))))
                     (cons (uri-decode kv) ""))))
 
+(defun expect (what expect got)
+  (unless (string= expect got)
+    (format t "Expected ~A:~%~S~%~%Got:~%~S~%" what expect got)
+    (break)))
+
 (defun do-test (&key name req creq sts authz)
   (format t "~%Test: ~A~%~S~%" name req)
-  (multiple-value-bind (my-headers my-creq my-sts)
-      (aws-sign4:aws-sign4 :us-east-1
-                           :host
-                           (getf req :method)
-                           "host.foo.com"
-                           (getf req :path)
-                           (getf req :params)
-                           (getf req :headers)
-                           (getf req :content)
-                           :date (local-time:parse-timestring "2011-09-09T23:36:00Z")
-                           :have-x-amz-date nil)
-    (unless (string= creq my-creq)
-      (format t "Expected creq:~%~S~%~%Got:~%~S~%" creq my-creq)
-      (break))
-    (unless (string= sts my-sts)
-      (format t "Expected sts:~%~A~%~%Got:~%~A~%" sts my-sts)
-      (break))))
+  (multiple-value-bind (my-authz my-creq my-sts)
+      (aws-sign4:aws-sign4 :service :host
+                           :region :us-east-1
+                           :method (getf req :method)
+                           :path (getf req :path)
+                           :params (getf req :params)
+                           :headers (getf req :headers)
+                           :payload (getf req :content)
+                           :request-date (local-time:parse-timestring "2011-09-09T23:36:00Z"))
+    (expect "creq" creq my-creq)
+    (expect "sts" sts my-sts)
+    (expect "authz" authz my-authz)))
 
 (defun run-tests ()
-  (dolist (req (directory (merge-pathnames (asdf:system-relative-pathname :aws-sign4 "tests/aws4_testsuite/")
-                                           "*.req")))
-    (apply #'do-test (load-test req))))
+  (let ((aws-sign4:*aws-credentials* (lambda ()
+                                       (values "AKIDEXAMPLE" "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"))))
+    (dolist (req (directory
+                  (merge-pathnames (asdf:system-relative-pathname :aws-sign4 "tests/aws4_testsuite/")
+                                   "*.req")))
+      (apply #'do-test (load-test req)))))
 
