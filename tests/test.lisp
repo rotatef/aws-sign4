@@ -82,15 +82,17 @@
 
 (defun do-test (&key name req creq sts authz)
   (format t "~%Test: ~A~%~S~%" name req)
-  (multiple-value-bind (my-authz x-amz-date my-creq my-sts)
+  (multiple-value-bind (my-authz my-date my-creq my-sts)
       (aws-sign4:aws-sign4 :service :host
                            :region :us-east-1
                            :method (getf req :method)
                            :path (getf req :path)
                            :params (getf req :params)
                            :headers (getf req :headers)
+                           :request-date (local-time:parse-timestring "2011-09-09T23:36:00Z")
+                           :date-header :date
                            :payload (getf req :content))
-    (declare (ignore x-amz-date))
+    (declare (ignore my-date))
     (expect "creq" creq my-creq)
     (expect "sts" sts my-sts)
     (expect "authz" authz my-authz)))

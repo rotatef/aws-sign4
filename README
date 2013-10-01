@@ -1,37 +1,47 @@
 Common Lisp library for Amazon Web Services signing version 4.
 
-* Passes all tests in the test suite from Amazon.
-
-Implements Signature Version 4 Signing Process, as described here:
+This library implements the Signature Version 4 Signing Process, as
+described here:
 http://docs.aws.amazon.com/general/latest/gr/signature-version-4.html
+
+Highlights:
+* Passes all tests in the test suite from Amazon.
+* Tested on ABCL, ACL, CCL, CLISP and SBCL.
+* Signing only, not tied to a specific http client library.
+
+See also example/example.lisp.
 
 Variable
 AWS-SIGN4:*AWS-CREDENTIALS*
 
-Bind this to a function returning two values, the access key and the
-secret key.
+Bind this variable to a function returning two values, the access key
+and the secret key.
 
 AWS-SIGN4:AWS-SIGN4 &key ...
 
-Calucates the signature for the request described by the it's parameters.
+Calculates the signature for a http request.
 
-Required parameters:
+Parameters:
 * region - String designator for the AWS region. Default "us-east-1".
 * service - String designator for the AWS service name.
-* method - String designator for the HTTP method.
-* host - The hostname/endpoint to for the request. Defaults to value
-  of the host header.
+* method - String designator for the http method.
+* host - The hostname/endpoint to for the request. Default is the
+  value of the host header.
 * path - The path part of the request URI.
 * params - The query parameters of the URI as an assoc list.
 * headers - The headers as an assoc list as an assoc list.
-* payload - The payload, as a string or vector of octets.
+* payload - The payload, as a string or vector of octets. Strings are
+  encoded to octets using UTF-8.
+* date-header - The name of the date-header, :X-AMZ-DATE or
+  :DATE. Default :X-AMZ-DATE.
+* request-date - The request date as a local-time timestamp.
+  Default (LOCAL-TIME:NOW).
 
 Returns seven values. Only the two first are needed, the others are
-useful for debugging. The X-Amz-Date header must be added to the
-request if the headers parameters did not include a "Date:" header.
+useful for debugging.
 
-* Value of "Authorization:" header to be added to the request.
-* Value of "X-Amz-Date": header to be added to the request.
+* Value of "Authorization" header.
+* Value of "X-Amz-Date" or "Date" header.
 * Canonical request
 * String to sign
 * Credential scope

@@ -19,7 +19,6 @@
   :name "aws-sign4"
   :licence "GNU General Public Licence 3.0"
   :depends-on (:local-time
-               :net-telent-date
                :ironclad
                :split-sequence
                :flexi-streams)

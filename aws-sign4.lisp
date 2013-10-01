@@ -129,9 +129,6 @@
          (k-signing (hmac k-service "aws4_request")))
     (hex-encode (hmac k-signing string-to-sign))))
 
-(defun parse-date (string)
-  (local-time:universal-to-timestamp (net.telent.date:parse-time string)))
-
 (defvar *aws-credentials* nil)
 
 (defun get-credentials ()
@@ -147,17 +144,16 @@
                     path
                     params
                     headers
-                    payload)
+                    payload
+                    (date-header :x-amz-date)
+                    (request-date (local-time:now)))
   (multiple-value-bind (access-key private-key)
       (get-credentials)
     (labels ((get-header (key)
                (cdr (assoc key headers :test #'string-equal))))
       (let* ((host (or host (get-header :host)))
-             (date-header (get-header :date))
              (x-amz-date (local-time:format-timestring nil
-                                                       (if date-header
-                                                           (parse-date date-header)
-                                                           (local-time:now))
+                                                       request-date
                                                        :format '((:year 4) (:month 2) (:day 2) #\T
                                                                  (:hour 2) (:min 2) (:sec 2)
                                                                  :gmt-offset-or-z)
@@ -168,8 +164,7 @@
              (credential-scope (format nil "~A/~A/~A/aws4_request" scope-date region service)))
         (unless (get-header :host)
           (push (cons :host host) headers))
-        (unless date-header
-          (push (cons :x-amz-date x-amz-date) headers))
+        (pushnew (cons date-header x-amz-date) headers :key #'car :test #'string-equal)
         (multiple-value-bind (creq singed-headers)
             (create-canonical-request method path params headers payload)
           (let* ((sts (string-to-sign x-amz-date
