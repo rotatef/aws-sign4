@@ -44,7 +44,7 @@
                     (write-char c s))
                    (t (loop for octet across
                             (ensure-octets (string (char string index)))
-                            do (format s "%~2,'0x" octet)))))))
+                            do (format s "~:@(%~2,'0X~)" octet)))))))
 
 (defun create-canonical-path (path)
   (let ((input (split-sequence:split-sequence #\/ path))
