@@ -28,8 +28,9 @@
 (defun hex-encode (bytes)
   (ironclad:byte-array-to-hex-string bytes))
 
-(defun url-encode (string &key (escape t))
-  "URL-encodes a string using the external UTF-8."
+(defun url-encode (string &key (escape% t))
+  "URL-encodes a string using the external format UTF-8. If keyword
+parameter ESCAPE% is NIL, the % is not escaped."
   (with-output-to-string (s)
     (loop for c across string
           for index from 0
@@ -39,7 +40,7 @@
                         ;; note that there's no comma in there - because of cookies
                         (find c "-_.~" :test #'char=))
                     (write-char c s))
-                   ((and (not escape)
+                   ((and (not escape%)
                          (char= #\% c))
                     (write-char c s))
                    (t (loop for octet across
@@ -61,7 +62,7 @@
           (pop input))
     (format nil "/~{~A~^/~}"
             (mapcar (lambda (x)
-                      (url-encode x :escape nil))
+                      (url-encode x :escape% nil))
                     (reverse output)))))
 
 (defun create-canonical-query-string (params)

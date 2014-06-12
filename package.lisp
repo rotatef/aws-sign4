@@ -19,4 +19,10 @@
   (:use :common-lisp)
   (:export
    #:*aws-credentials*
-   #:aws-sign4))
+   #:aws-sign4
+   #:create-canonical-path
+   #:create-canonical-query-string
+   #:create-canonical-headers
+   #:create-canonical-request
+   #:calculate-signature
+   #:get-credentials))
