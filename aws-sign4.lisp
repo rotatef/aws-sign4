@@ -124,7 +124,7 @@ parameter ESCAPE% is NIL, the % is not escaped."
     (ironclad:hmac-digest hmac)))
 
 (defun calculate-signature (k-secret string-to-sign date region service)
-  (let* ((k-date (hmac (concatenate 'string "AWS4" k-secret) date))
+  (let* ((k-date (hmac (concatenate 'string "AWS4" (secret-values:ensure-value-revealed k-secret)) date))
          (k-region (hmac k-date region))
          (k-service (hmac k-region service))
          (k-signing (hmac k-service "aws4_request")))
@@ -179,7 +179,7 @@ parameter ESCAPE% is NIL, the % is not escaped."
             (values
              (format nil
                      "AWS4-HMAC-SHA256 Credential=~A/~A, SignedHeaders=~A, Signature=~A"
-                     access-key
+                     (secret-values:ensure-value-revealed access-key)
                      credential-scope
                      singed-headers
                      signature)
