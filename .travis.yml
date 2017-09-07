@@ -13,4 +13,4 @@ install:
   - curl -L https://github.com/luismbo/cl-travis/raw/master/install.sh | sh
 
 script:
-  - cl -e "(asdf:test-system :aws-sign4)"
+  - cl -e "(ql:quickload :aws-sign4) (asdf:test-system :aws-sign4)"
