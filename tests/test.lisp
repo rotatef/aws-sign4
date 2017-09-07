@@ -93,7 +93,7 @@
                                  :host "examplebucket.s3.amazonaws.com"
                                  :path "test.txt"
                                  :request-date (local-time:parse-timestring "2013-05-24T00:00:00Z")
-                                 :expire 86400))))
+                                 :expires 86400))))
 
 (defun do-test (&key name req creq sts authz)
   (format t "~%Test: ~A~%~S~%" name req)
