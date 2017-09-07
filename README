@@ -38,11 +38,14 @@ Parameters:
   :DATE. Default :X-AMZ-DATE.
 * request-date - The request date as a local-time timestamp.
   Default (LOCAL-TIME:NOW).
+* expire - Provides the time period, in seconds, for which the generated presigned URL is valid.
+* scheme - Scheme used in presigned URL, defaults to https.
 
 Returns seven values. Only the two first are needed, the others are
 useful for debugging.
 
-* Value of "Authorization" header.
+* If expire is nil or not supplied, the value of "Authorization" header.
+  If expire is supplied, the presigned URL.
 * Value of "X-Amz-Date" or "Date" header.
 * Canonical request
 * String to sign

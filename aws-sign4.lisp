@@ -90,26 +90,27 @@ parameter ESCAPE% is NIL, the % is not escaped."
          #'string<
          :key #'car)))
 
+(defun create-signed-headers (canonical-headers)
+  (format nil "~{~A~^;~}" (mapcar #'car canonical-headers)))
 
-(defun create-canonical-request (method path params headers payload)
-  (let* ((canonical-headers (create-canonical-headers headers))
-         (signed-headers (format nil "~{~A~^;~}" (mapcar #'car canonical-headers))))
-    (values (with-output-to-string (str)
-              ;; HTTPRequestMethod:
-              (write-line (string-upcase method) str)
-              ;; CanonicalURI:
-              (write-line (create-canonical-path path) str)
-              ;; CanonicalQueryString:
-              (write-line (create-canonical-query-string params) str)
-              ;; CanonicalHeaders:
-              (dolist (header canonical-headers)
-                (format str "~A:~{~A~^,~}~%" (car header) (cdr header)))
-              (write-line "" str)
-              ;; SignedHeaders
-              (write-line signed-headers str)
-              ;; Payload
-              (write-string (hex-encode (hash (ensure-octets payload))) str))
-            signed-headers)))
+(defun create-canonical-request (method canonical-path canonical-query-string canonical-headers signed-headers payload)
+  (with-output-to-string (str)
+    ;; HTTPRequestMethod:
+    (write-line (string-upcase method) str)
+    ;; CanonicalURI:
+    (write-line canonical-path str)
+    ;; CanonicalQueryString:
+    (write-line canonical-query-string str)
+    ;; CanonicalHeaders:
+    (dolist (header canonical-headers)
+      (format str "~A:~{~A~^,~}~%" (car header) (cdr header)))
+    (write-line "" str)
+    ;; SignedHeaders
+    (write-line signed-headers str)
+    ;; Payload
+    (if payload
+        (write-string (hex-encode (hash (ensure-octets payload))) str)
+        (write-string "UNSIGNED-PAYLOAD" str))))
 
 (defun string-to-sign (request-date credential-scope canonical-request)
   (with-output-to-string (str)
@@ -140,14 +141,16 @@ parameter ESCAPE% is NIL, the % is not escaped."
 (defun aws-sign4 (&key
                     (region :us-east-1)
                     service
-                    method
+                    (method :get)
                     host
                     path
                     params
                     headers
                     payload
-                    (date-header :x-amz-date)
-                    (request-date (local-time:now)))
+                    (date-header  "X-Amz-Date")
+                    (request-date (local-time:now))
+                    expires
+                    (scheme :https))
   (multiple-value-bind (access-key private-key)
       (get-credentials)
     (labels ((get-header (key)
@@ -165,10 +168,23 @@ parameter ESCAPE% is NIL, the % is not escaped."
              (credential-scope (format nil "~A/~A/~A/aws4_request" scope-date region service)))
         (unless (get-header :host)
           (push (cons :host host) headers))
-        (pushnew (cons date-header x-amz-date) headers :key #'car :test #'string-equal)
-        (multiple-value-bind (creq singed-headers)
-            (create-canonical-request method path params headers payload)
-          (let* ((sts (string-to-sign x-amz-date
+        (unless expires
+          (pushnew (cons date-header x-amz-date) headers :key #'car :test #'string-equal))
+        (let* ((canonical-headers (create-canonical-headers headers))
+               (signed-headers (create-signed-headers canonical-headers)))
+            (when expires
+              (push (cons "X-Amz-Algorithm" "AWS4-HMAC-SHA256") params)
+              (push (cons "X-Amz-Credential" (format nil "~A/~A"
+                                                     (secret-values:ensure-value-revealed access-key)
+                                                     credential-scope))
+                    params)
+              (push (cons "X-Amz-Date" x-amz-date) params)
+              (push (cons "X-Amz-Expires" (princ-to-string expires)) params)
+              (push (cons "X-Amz-SignedHeaders" signed-headers) params))
+          (let* ((canonical-path (create-canonical-path path))
+                 (canonical-query-string (create-canonical-query-string params))
+                 (creq (create-canonical-request method canonical-path canonical-query-string canonical-headers signed-headers payload))
+                 (sts (string-to-sign x-amz-date
                                       credential-scope
                                       creq))
                  (signature (calculate-signature private-key
@@ -177,15 +193,22 @@ parameter ESCAPE% is NIL, the % is not escaped."
                                                  region
                                                  service)))
             (values
-             (format nil
-                     "AWS4-HMAC-SHA256 Credential=~A/~A, SignedHeaders=~A, Signature=~A"
-                     (secret-values:ensure-value-revealed access-key)
-                     credential-scope
-                     singed-headers
-                     signature)
+             (if expires
+                 (format nil "~A://~A~A?~A&X-Amz-Signature=~A"
+                         (string-downcase scheme)
+                         host
+                         canonical-path
+                         canonical-query-string
+                         signature)
+                 (format nil
+                         "AWS4-HMAC-SHA256 Credential=~A/~A, SignedHeaders=~A, Signature=~A"
+                         (secret-values:ensure-value-revealed access-key)
+                         credential-scope
+                         signed-headers
+                         signature))
              x-amz-date
              creq
              sts
              credential-scope
-             singed-headers
+             signed-headers
              signature)))))))

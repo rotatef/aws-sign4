@@ -80,6 +80,21 @@
     (format t "Expected ~A:~%~S~%~%Got:~%~S~%" what expect got)
     (break)))
 
+(defun test-presigning ()
+  (let ((aws-sign4:*aws-credentials* (lambda ()
+                                       (values "AKIAIOSFODNN7EXAMPLE"
+                                               "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"))))
+
+    (expect "presigned url"
+            "https://examplebucket.s3.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20130524%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20130524T000000Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404"
+            (aws-sign4:aws-sign4 :region :us-east-1
+                                 :service :s3
+                                 :method :get
+                                 :host "examplebucket.s3.amazonaws.com"
+                                 :path "test.txt"
+                                 :request-date (local-time:parse-timestring "2013-05-24T00:00:00Z")
+                                 :expire 86400))))
+
 (defun do-test (&key name req creq sts authz)
   (format t "~%Test: ~A~%~S~%" name req)
   (multiple-value-bind (my-authz my-date my-creq my-sts)
@@ -100,6 +115,7 @@
 (defun run-tests ()
   (let ((aws-sign4:*aws-credentials* (lambda ()
                                        (values "AKIDEXAMPLE" "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"))))
+    (test-presigning)
     (dolist (req (directory
                   (merge-pathnames (asdf:system-relative-pathname :aws-sign4 "tests/aws4_testsuite/")
                                    "*.req")))
