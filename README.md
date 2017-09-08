@@ -13,9 +13,26 @@ http://docs.aws.amazon.com/general/latest/gr/signature-version-4.html
 * Tested on ABCL, ACL, CCL, CLISP and SBCL.
 * Signing only, not tied to a specific http client library.
 
-## API
+## Example
 
-See also [example.lisp](example/example.lisp).
+See [example.lisp](example/example.lisp) for an example of using Drakma to make a request to SWF.
+
+S3 supports [presigned URL](http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html).
+This make is possible to give a web browser temporary access to download an object directly from S3. Example:
+
+```lisp
+(let ((aws-sign4:*aws-credentials*
+        (lambda ()
+          (values "AKIAIOSFODNN7EXAMPLE" "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"))))
+  (aws-sign4:aws-sign4 :region :eu-west-1
+                       :service :s3
+                       :host "s3-eu-west-1.amazonaws.com"
+                       :path "/some-bucket/some-file"
+                       :expires 300)) 
+=> "https://s3-eu-west-1.amazonaws.com/some-bucket/some-file?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20170908%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20170908T121925Z&X-Amz-Expires=300&X-Amz-SignedHeaders=host&X-Amz-Signature=42c841837976e9c206f80554b50aa879fdb3aa4f3e6f61934ce8eba436205abf                      
+```
+
+## API
 
 Variable
 ```
