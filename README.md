@@ -7,13 +7,15 @@ This library implements the Signature Version 4 Signing Process, as
 described here:
 http://docs.aws.amazon.com/general/latest/gr/signature-version-4.html
 
-Highlights:
+## Highlights:
 
 * Passes all tests in the test suite from Amazon.
 * Tested on ABCL, ACL, CCL, CLISP and SBCL.
 * Signing only, not tied to a specific http client library.
 
-See also example/example.lisp.
+## API
+
+See also [example.lisp](example/example.lisp).
 
 Variable
 ```
