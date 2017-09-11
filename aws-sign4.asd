@@ -17,7 +17,9 @@
 
 (defsystem #:aws-sign4
   :name "aws-sign4"
-  :licence "GNU General Public Licence 3.0"
+  :licence "GNU Lesser General Public Licence 3.0"
+  :author "Thomas Bakketun <thomas.bakketun@copyleft.no>"
+  :description "A library for Amazon Web Services signing version 4"
   :depends-on (:local-time
                :ironclad
                :split-sequence
@@ -38,7 +40,9 @@
 
 (defsystem #:aws-sign4-tests
   :name "aws-sign4-tests"
-  :licence "GNU General Public Licence 3.0"
+  :licence "GNU Lesser General Public Licence 3.0"
+  :author "Thomas Bakketun <thomas.bakketun@copyleft.no>"
+  :description "Tests for aws-sign4"
   :depends-on (:aws-sign4)
   :components ((:module tests
                         :serial t
