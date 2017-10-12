@@ -1,7 +1,7 @@
 Common Lisp library for Amazon Web Services signing version 4.
 ==============================================================
 
-Project home: https://github.com/copyleft/aws-sign4
+Project home: https://github.com/rotatef/aws-sign4
 
 This library implements the Signature Version 4 Signing Process, as
 described here:
