@@ -164,7 +164,9 @@ parameter ESCAPE% is NIL, the % is not escaped."
                                                        :timezone local-time:+utc-zone+))
              (scope-date (subseq x-amz-date 0 8))
              (region (string-downcase region))
-             (service (string-downcase service))
+             (service (etypecase service
+                        (symbol (string-downcase service))
+                        (string service)))
              (credential-scope (format nil "~A/~A/~A/aws4_request" scope-date region service)))
         (unless (get-header :host)
           (push (cons :host host) headers))
