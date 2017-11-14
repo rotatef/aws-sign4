@@ -10,7 +10,7 @@ env:
     - LISP=sbcl
     - LISP=abcl
     - LISP=sbcl
-    #- LISP=ccl
+    - LISP=ccl
     - LISP=clisp
 
 install:
