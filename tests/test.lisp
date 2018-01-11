@@ -48,23 +48,27 @@
   (flex:octets-to-string
    (loop with pos = 0
          while (< pos (length string))
-         collect (cond ((char= #\% (char string pos))
-                        (let ((code (ignore-errors (parse-integer string
-                                                                  :start (+ 1 pos)
-                                                                  :end (+ 3 pos)
-                                                                  :radix 15))))
-                          (cond (code
-                                 (incf pos 3)
-                                 code)
-                                (t
-                                 (incf pos)
-                                 (char-code #\%)))))
-                       ((char= #\+ (char string pos))
-                        (incf pos)
-                        32)
-                       (t
-                        (incf pos)
-                        (char-code (char string (1- pos))))))
+         append (cond ((and (char= #\% (char string pos))
+                            (< pos (- (length string) 2)))
+                       (let ((code (parse-integer string
+                                                  :start (+ 1 pos)
+                                                  :end (+ 3 pos)
+                                                  :radix 16)))
+                         (cond (code
+                                (incf pos 3)
+                                (list code))
+                               (t
+                                (incf pos)
+                                (list (char-code #\%))))))
+                      ((char= #\+ (char string pos))
+                       (incf pos)
+                       (list 32))
+                      (t
+                       (incf pos)
+                       (coerce (flex:string-to-octets string :start (1- pos)
+                                                             :end pos
+                                                             :external-format :utf-8)
+                               'list))))
    :external-format :utf-8))
 
 (defun query-decode (string)
