@@ -152,6 +152,8 @@ parameter ESCAPE% is NIL, the % is not escaped."
                     (request-date (local-time:now))
                     expires
                     (scheme :https))
+  (check-type service (and (not null) (or symbol string)) "an AWS service designator")
+  (check-type path string)
   (multiple-value-bind (access-key private-key)
       (get-credentials)
     (labels ((get-header (key)
@@ -169,6 +171,8 @@ parameter ESCAPE% is NIL, the % is not escaped."
                         (symbol (string-downcase service))
                         (string service)))
              (credential-scope (format nil "~A/~A/~A/aws4_request" scope-date region service)))
+        (unless host
+          (error "Error in arguments to aws-sign4. Missing host."))
         (unless (get-header :host)
           (push (cons :host host) headers))
         (unless expires
