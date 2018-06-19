@@ -80,10 +80,9 @@ parameter ESCAPE% is NIL, the % is not escaped."
   (loop for header = (pop headers)
         while header
         collect `(,(car header)
-                  ,@(sort (cons (cdr header)
-                                (loop while (equal (car header) (caar headers))
-                                      collect (cdr (pop headers))))
-                          #'string<))))
+                  ,@(cons (cdr header)
+                          (loop while (equal (car header) (caar headers))
+                                collect (cdr (pop headers)))))))
 
 (defun create-canonical-headers (headers)
   (merge-duplicate-headers
