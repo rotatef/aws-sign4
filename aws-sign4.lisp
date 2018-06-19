@@ -74,7 +74,7 @@ parameter ESCAPE% is NIL, the % is not escaped."
                 #'string<)))
 
 (defun trimall (string)
-  (string-trim '(#\Space #\Tab) string))
+  (cl-ppcre:regex-replace-all "^\\s+|(?<=\\s)\\s+|\\s+$" string ""))
 
 (defun merge-duplicate-headers (headers)
   (loop for header = (pop headers)

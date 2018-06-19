@@ -21,6 +21,7 @@
   :author "Thomas Bakketun <thomas.bakketun@copyleft.no>"
   :description "A library for Amazon Web Services signing version 4"
   :depends-on (:local-time
+               :cl-ppcre
                :ironclad
                :split-sequence
                :flexi-streams
