@@ -26,13 +26,17 @@
         (list :method (intern (subseq req-line 0 method-end) :keyword)
               :path (subseq req-line uri-start path-end)
               :params (when query-start (query-decode (subseq req-line query-start uri-end)))
-              :headers (loop for header = (read-line in)
+              :headers (loop with name
+                             for header = (read-line in nil)
+                             while header
                              until (string= "" header)
-                             collect (let ((colon-pos (position #\: header)))
-                                       (cons (subseq header 0 colon-pos)
-                                             (subseq header (1+ colon-pos)))))
+                             collect (if (member (char header 0) '(#\Space #\Tab))
+                                         (cons name header)
+                                         (let ((colon-pos (position #\: header)))
+                                           (cons (setf name (subseq header 0 colon-pos))
+                                                 (subseq header (1+ colon-pos))))))
               :content (let* ((content-length (- (file-length bin)
-                                                (file-position bin)))
+                                                 (file-position bin)))
                               (content (make-array content-length :element-type 'flex:octet)))
                          (read-sequence content bin)
                          content))))))
@@ -102,14 +106,13 @@
 (defun do-test (&key name req creq sts authz)
   (format t "~%Test: ~A~%~S~%" name req)
   (multiple-value-bind (my-authz my-date my-creq my-sts)
-      (aws-sign4:aws-sign4 :service :host
+      (aws-sign4:aws-sign4 :service :service
                            :region :us-east-1
                            :method (getf req :method)
                            :path (getf req :path)
                            :params (getf req :params)
                            :headers (getf req :headers)
-                           :request-date (local-time:parse-timestring "2011-09-09T23:36:00Z")
-                           :date-header :date
+                           :request-date (local-time:parse-timestring "2015-08-30T12:36:00Z")
                            :payload (getf req :content))
     (declare (ignore my-date))
     (expect "creq" creq my-creq)
@@ -121,7 +124,12 @@
                                        (values "AKIDEXAMPLE" "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"))))
     (test-presigning)
     (dolist (req (directory
-                  (merge-pathnames (asdf:system-relative-pathname :aws-sign4 "tests/aws4_testsuite/")
-                                   "*.req")))
+                  (make-pathname :directory (append
+                                             (pathname-directory
+                                              (asdf:system-relative-pathname
+                                               :aws-sign4 "tests/aws-sig-v4-test-suite/aws-sig-v4-test-suite/"))
+                                             '(:wild))
+                                 :name :wild
+                                 :type "req")))
       (apply #'do-test (load-test req)))))
 
