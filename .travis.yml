@@ -9,7 +9,6 @@ env:
   matrix:
     - LISP=sbcl
     - LISP=abcl
-    - LISP=sbcl
     - LISP=ccl
     - LISP=clisp
 
