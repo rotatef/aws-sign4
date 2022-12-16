@@ -23,7 +23,11 @@
       data))
 
 (defun hash (data)
-  (ironclad:digest-sequence :sha256 data))
+  (etypecase data
+    ((simple-array (unsigned-byte 8) (*))
+     (ironclad:digest-sequence :sha256 data))
+    (pathname
+     (ironclad:digest-file :sha256 data))))
 
 (defun hex-encode (bytes)
   (ironclad:byte-array-to-hex-string bytes))
