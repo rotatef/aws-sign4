@@ -19,7 +19,7 @@
 
 (defun ensure-octets (data)
   (if (stringp data)
-      (flex:string-to-octets data :external-format :utf-8)
+      (flex:string-to-octets data :external-format '(:utf-8 :eol-style :lf))
       data))
 
 (defun hash (data)
